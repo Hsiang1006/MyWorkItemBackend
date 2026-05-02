@@ -5,17 +5,17 @@ WORKDIR /src
 
 # 複製專案檔並執行還原 (Restore)
 # 分開複製能有效利用 Docker Layer Cache，加快之後的編譯速度
-COPY ["MyWorkItem.API/MyWorkItem.API.csproj", "MyWorkItem.API/"]
-RUN dotnet restore "MyWorkItem.API/MyWorkItem.API.csproj"
+COPY ["MyWorkItemBackend/MyWorkItemBackend.csproj", "MyWorkItemBackend/"]
+RUN dotnet restore "MyWorkItemBackend/MyWorkItemBackend.csproj"
 
 # 複製其餘所有原始碼並進行編譯
 COPY . .
-WORKDIR "/src/MyWorkItem.API"
-RUN dotnet build "MyWorkItem.API.csproj" -c Release -o /app/build
+WORKDIR "/src/MyWorkItemBackend"
+RUN dotnet build "MyWorkItemBackend.csproj" -c Release -o /app/build
 
 # 發佈發行版本 (Publish)
 FROM build AS publish
-RUN dotnet publish "MyWorkItem.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "MyWorkItemBackend.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # 第二階段：執行階段 (Runtime Stage)
 # 僅使用極小的 Runtime 鏡像，確保最終映像檔體積最小化且安全
@@ -29,4 +29,4 @@ EXPOSE 8080
 COPY --from=publish /app/publish .
 
 # 設定啟動指令
-ENTRYPOINT ["dotnet", "MyWorkItem.API.dll"]
+ENTRYPOINT ["dotnet", "MyWorkItemBackend.dll"]
