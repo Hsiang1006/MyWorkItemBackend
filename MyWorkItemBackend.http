@@ -1,6 +1,12 @@
 @MyWorkItemBackend_HostAddress = http://localhost:5162
 
-GET {{MyWorkItemBackend_HostAddress}}/weatherforecast/
+POST {{MyWorkItemBackend_HostAddress}}/api/auth/login
+Content-Type: application/json
 Accept: application/json
+
+{
+  "username": "admin",
+  "password": "Password123!"
+}
 
 ###
