@@ -6,6 +6,9 @@ using System.Text;
 using MyWorkItemBackend.Data;
 using MyWorkItemBackend.Services;
 
+// 強制 Npgsql 使用 UTC 時區處理邏輯
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.

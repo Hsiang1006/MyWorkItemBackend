@@ -51,6 +51,20 @@ public class AppDbContext : DbContext
 
         // 3. 針對 WorkItem 設定全域軟刪除過濾器
         modelBuilder.Entity<WorkItem>().HasQueryFilter(w => !w.IsDeleted);
+
+        // 4. 強制所有 DateTime 欄位在讀取時都視為 UTC
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+                        v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc)));
+                }
+            }
+        }
     }
 
     public override int SaveChanges()
