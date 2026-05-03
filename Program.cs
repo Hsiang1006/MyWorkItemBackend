@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using MyWorkItemBackend.Data;
 using MyWorkItemBackend.Services;
@@ -25,6 +26,7 @@ builder.Services.AddCors(options =>
 
 // 註冊 AuthService (依賴注入)
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IWorkItemService, WorkItemService>();
 
 // 設定 JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -47,19 +49,53 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
+
+    // 自訂 403 權限不足的回傳訊息
+    options.Events = new JwtBearerEvents
+    {
+        OnForbidden = context =>
+        {
+            context.Response.StatusCode = 403;
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new { message = "權限不足，您沒有執行此操作的權限", status = false });
+            return context.Response.WriteAsync(result);
+        }
+    };
 });
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-builder.Services.AddSwaggerGen();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    // 1. 定義 Security Scheme (JWT Bearer)
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "請輸入 JWT Token。格式為：Bearer {你的Token}"
+    });
+
+    // 2. 讓所有 API 預設套用這個安全要求
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            new string[] {}
+        }
+    });
+});
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
