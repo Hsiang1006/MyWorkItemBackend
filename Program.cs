@@ -5,23 +5,38 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using MyWorkItemBackend.Data;
 using MyWorkItemBackend.Services;
+using Serilog;
 
 // 強制 Npgsql 使用 UTC 時區處理邏輯
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-var builder = WebApplication.CreateBuilder(args);
+// 初始化 Serilog
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// 停用設定檔變更監控，以避免在 Render 環境發生 inotify 限制錯誤
-builder.Configuration.Sources.Clear();
-builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-                     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
-                     .AddEnvironmentVariables();
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
 
-// 確保應用程式監聽 Render 指定的埠號，並綁定到 0.0.0.0
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+    // 使用 Serilog 替換預設日誌
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"));
 
-// Add services to the container.
+    // 停用設定檔變更監控，以避免在 Render 環境發生 inotify 限制錯誤
+    builder.Configuration.Sources.Clear();
+    builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+                         .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
+                         .AddEnvironmentVariables();
+
+    // 確保應用程式監聽 Render 指定的埠號，並綁定到 0.0.0.0
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+    // Add services to the container.
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -122,6 +137,15 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+    app.MapControllers();
 
-app.Run();
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "應用程式啟動失敗");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
