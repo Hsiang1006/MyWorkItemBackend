@@ -12,15 +12,19 @@ public class AuthService : IAuthService
 {
     private readonly AppDbContext _context;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(AppDbContext context, IConfiguration configuration)
+    public AuthService(AppDbContext context, IConfiguration configuration, ILogger<AuthService> logger)
     {
         _context = context;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
+        _logger.LogInformation("正在嘗試登入使用帳號: {Username}", request.Username);
+
         // 1. 查詢使用者與關聯的角色
         var user = await _context.Users
             .Include(u => u.UserRoles)
@@ -30,6 +34,7 @@ public class AuthService : IAuthService
         // 2. 驗證帳號與密碼 (使用 BCrypt)
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
+            _logger.LogWarning("登入失敗: 帳號或密碼錯誤 (使用者: {Username})", request.Username);
             return new LoginResponse
             {
                 Message = "帳號或密碼錯誤",
@@ -39,6 +44,7 @@ public class AuthService : IAuthService
 
         // 3. 取得使用者的角色列表
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
+        _logger.LogInformation("登入成功: 使用者 {Username}, 角色: {Roles}", request.Username, string.Join(", ", roles));
 
         // 4. 產生 JWT Token
         var token = GenerateJwtToken(user.Id, roles);

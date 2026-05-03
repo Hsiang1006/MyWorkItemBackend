@@ -83,6 +83,11 @@ builder.Services.AddAuthentication(options =>
     {
         OnForbidden = context =>
         {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("存取拒絕 (403): 使用者 {UserId} 嘗試存取 {Path}", 
+                context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, 
+                context.HttpContext.Request.Path);
+
             context.Response.StatusCode = 403;
             context.Response.ContentType = "application/json";
             var result = System.Text.Json.JsonSerializer.Serialize(new { message = "權限不足，您沒有執行此操作的權限", status = false });
@@ -127,6 +132,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseSerilogRequestLogging(); // 加入這行來記錄 HTTP 請求詳細資訊
 
 app.UseHttpsRedirection();
 
