@@ -9,7 +9,16 @@ using MyWorkItemBackend.Services;
 // 強制 Npgsql 使用 UTC 時區處理邏輯
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args
+});
+
+// 停用設定檔變更監控，以避免在 Render 環境發生 inotify 限制錯誤
+builder.Configuration.Sources.Clear();
+builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+                     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
+                     .AddEnvironmentVariables();
 
 // Add services to the container.
 
