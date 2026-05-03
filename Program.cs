@@ -5,13 +5,47 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using MyWorkItemBackend.Data;
 using MyWorkItemBackend.Services;
+using Serilog;
+using Serilog.Events;
 
 // 強制 Npgsql 使用 UTC 時區處理邏輯
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-var builder = WebApplication.CreateBuilder(args);
+// 初始化 Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
+    .MinimumLevel.Override("System", LogEventLevel.Warning)
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// Add services to the container.
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
+
+    // 使用 Serilog 替換預設日誌
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
+        .MinimumLevel.Override("System", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"));
+
+    // 停用設定檔變更監控，以避免在 Render 環境發生 inotify 限制錯誤
+    builder.Configuration.Sources.Clear();
+    builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+                         .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
+                         .AddEnvironmentVariables();
+
+    // 確保應用程式監聽 Render 指定的埠號，並綁定到 0.0.0.0
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+    // Add services to the container.
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -58,6 +92,11 @@ builder.Services.AddAuthentication(options =>
     {
         OnForbidden = context =>
         {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("存取拒絕 (403): 使用者 {UserId} 嘗試存取 {Path}", 
+                context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, 
+                context.HttpContext.Request.Path);
+
             context.Response.StatusCode = 403;
             context.Response.ContentType = "application/json";
             var result = System.Text.Json.JsonSerializer.Serialize(new { message = "權限不足，您沒有執行此操作的權限", status = false });
@@ -103,6 +142,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseSerilogRequestLogging(); // 加入這行來記錄 HTTP 請求詳細資訊
+
 app.UseHttpsRedirection();
 
 // 套用 CORS 政策
@@ -112,6 +153,15 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+    app.MapControllers();
 
-app.Run();
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "應用程式啟動失敗");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
