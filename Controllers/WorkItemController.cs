@@ -25,11 +25,11 @@ public class WorkItemController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetList([FromQuery] string sort = "latest")
+    public async Task<IActionResult> GetList([FromQuery] string sort = "latest", [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         var userId = GetUserId();
-        var items = await _workItemService.GetWorkItemsAsync(userId, sort);
-        return Ok(items);
+        var result = await _workItemService.GetWorkItemsAsync(userId, sort, page, pageSize);
+        return Ok(result);
     }
 
     [HttpGet("{id}")]
@@ -49,6 +49,9 @@ public class WorkItemController : ControllerBase
     {
         if (request.WorkItemIds == null || !request.WorkItemIds.Any())
             return BadRequest(new { message = "請提供至少一個任務 ID", status = false });
+
+        if (request.WorkItemIds.Count > 100)
+            return BadRequest(new { message = "一次最多只能批次確認 100 個任務", status = false });
 
         var userId = GetUserId();
         var result = await _workItemService.BatchConfirmAsync(userId, request.WorkItemIds);

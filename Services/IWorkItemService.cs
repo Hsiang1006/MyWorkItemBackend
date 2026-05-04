@@ -8,11 +8,7 @@ namespace MyWorkItemBackend.Services;
 public interface IWorkItemService
 {
     // --- 前台 User 端 ---
-    
-    /// <summary>
-    /// 取得任務列表（根據 userId 執行 LEFT JOIN 合併個人狀態）
-    /// </summary>
-    Task<List<WorkItemListDto>> GetWorkItemsAsync(Guid userId, string sort = "latest");
+    Task<PagedResultDto<WorkItemListDto>> GetWorkItemsAsync(Guid userId, string sort = "latest", int page = 1, int pageSize = 10);
 
     /// <summary>
     /// 取得單一任務詳情
