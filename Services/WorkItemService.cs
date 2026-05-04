@@ -140,6 +140,54 @@ public class WorkItemService : IWorkItemService
 
     // --- 後台 Admin 端 ---
 
+    public async Task<PagedResultDto<WorkItemListDto>> GetAdminWorkItemsAsync(string sort = "latest", int page = 1, int pageSize = 10)
+    {
+        var query = _context.WorkItems.AsQueryable();
+
+        // 根據參數進行排序
+        if (sort.ToLower() == "oldest")
+            query = query.OrderBy(w => w.CreatedAt);
+        else
+            query = query.OrderByDescending(w => w.CreatedAt);
+
+        var totalCount = await query.CountAsync();
+
+        // Admin 列表不需要個人狀態，預設給 "Pending" 即可
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(w => new WorkItemListDto
+            {
+                WorkItemId = w.WorkItemId,
+                Title = w.Title,
+                Status = "Pending" 
+            }).ToListAsync();
+
+        return new PagedResultDto<WorkItemListDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            CurrentPage = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<WorkItemDto?> GetAdminWorkItemByIdAsync(Guid workItemId)
+    {
+        return await _context.WorkItems
+            .Where(w => w.WorkItemId == workItemId)
+            .Select(w => new WorkItemDto
+            {
+                WorkItemId = w.WorkItemId,
+                Title = w.Title,
+                Description = w.Description,
+                Status = "Pending",
+                CreatedAt = w.CreatedAt,
+                UpdatedAt = w.UpdatedAt
+            })
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<WorkItemDto> CreateAdminWorkItemAsync(CreateWorkItemRequest request)
     {
         var workItem = new WorkItem

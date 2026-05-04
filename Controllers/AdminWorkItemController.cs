@@ -17,6 +17,24 @@ public class AdminWorkItemController : ControllerBase
         _workItemService = workItemService;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetList([FromQuery] string sort = "latest", [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        var result = await _workItemService.GetAdminWorkItemsAsync(sort, page, pageSize);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetDetail(Guid id)
+    {
+        var item = await _workItemService.GetAdminWorkItemByIdAsync(id);
+        
+        if (item == null)
+            return NotFound(new { message = "找不到該任務項目", status = false });
+
+        return Ok(item);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateWorkItemRequest request)
     {
