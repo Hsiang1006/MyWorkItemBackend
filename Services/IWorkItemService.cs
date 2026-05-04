@@ -29,6 +29,16 @@ public interface IWorkItemService
     // --- 後台 Admin 端 ---
 
     /// <summary>
+    /// 管理員：取得所有任務列表 (含分頁)
+    /// </summary>
+    Task<PagedResultDto<WorkItemListDto>> GetAdminWorkItemsAsync(string sort = "latest", int page = 1, int pageSize = 10);
+
+    /// <summary>
+    /// 管理員：取得單一任務詳情 (供編輯預填使用)
+    /// </summary>
+    Task<WorkItemDto?> GetAdminWorkItemByIdAsync(Guid workItemId);
+
+    /// <summary>
     /// 管理員：建立任務
     /// </summary>
     Task<WorkItemDto> CreateAdminWorkItemAsync(CreateWorkItemRequest request);
