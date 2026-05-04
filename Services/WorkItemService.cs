@@ -16,38 +16,48 @@ public class WorkItemService : IWorkItemService
 
     // --- 前台 User 端 ---
 
-    public async Task<List<WorkItemListDto>> GetWorkItemsAsync(Guid userId, string sort = "latest")
+    public async Task<PagedResultDto<WorkItemListDto>> GetWorkItemsAsync(Guid userId, string sort = "latest", int page = 1, int pageSize = 10)
     {
-        // 核心邏輯：LEFT JOIN WorkItems 與 UserWorkItemStatuses
+        // 核心邏輯：LEFT JOIN WorkItems 與 UserWorkItemStatuses (投影優化)
         var query = from w in _context.WorkItems
                     join s in _context.UserWorkItemStatuses.Where(x => x.UserId == userId)
                     on w.WorkItemId equals s.WorkItemId into joinedStatus
                     from status in joinedStatus.DefaultIfEmpty()
-                    select new WorkItemListDto
+                    select new
                     {
-                        WorkItemId = w.WorkItemId,
-                        Title = w.Title,
-                        Status = status != null ? status.Status : "Pending"
+                        w.WorkItemId,
+                        w.Title,
+                        Status = status != null ? status.Status : "Pending",
+                        w.CreatedAt
                     };
 
-        // 根據參數進行排序 (列表通常依據建立時間，即便不回傳也需要排序)
-        var sortQuery = from w in _context.WorkItems
-                        join s in _context.UserWorkItemStatuses.Where(x => x.UserId == userId)
-                        on w.WorkItemId equals s.WorkItemId into joinedStatus
-                        from status in joinedStatus.DefaultIfEmpty()
-                        select new { w, status };
-
+        // 根據參數進行排序
         if (sort.ToLower() == "oldest")
-            sortQuery = sortQuery.OrderBy(x => x.w.CreatedAt);
+            query = query.OrderBy(x => x.CreatedAt);
         else
-            sortQuery = sortQuery.OrderByDescending(x => x.w.CreatedAt);
+            query = query.OrderByDescending(x => x.CreatedAt);
 
-        return await sortQuery.Select(x => new WorkItemListDto
+        // 取得總筆數 (用於計算分頁)
+        var totalCount = await query.CountAsync();
+
+        // 應用分頁邏輯 (Skip & Take)，並最終轉換為 DTO 回傳
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new WorkItemListDto
+            {
+                WorkItemId = x.WorkItemId,
+                Title = x.Title,
+                Status = x.Status
+            }).ToListAsync();
+
+        return new PagedResultDto<WorkItemListDto>
         {
-            WorkItemId = x.w.WorkItemId,
-            Title = x.w.Title,
-            Status = x.status != null ? x.status.Status : "Pending"
-        }).ToListAsync();
+            Items = items,
+            TotalCount = totalCount,
+            CurrentPage = page,
+            PageSize = pageSize
+        };
     }
 
     public async Task<WorkItemDto?> GetWorkItemByIdAsync(Guid userId, Guid workItemId)
@@ -74,16 +84,24 @@ public class WorkItemService : IWorkItemService
     public async Task<bool> BatchConfirmAsync(Guid userId, List<Guid> workItemIds)
     {
         var utcNow = DateTime.UtcNow;
-        var existingItems = await _context.WorkItems
+
+        // 1. 確保這些任務真的存在 (且未被軟刪除)
+        var existingWorkItemIds = await _context.WorkItems
             .Where(w => workItemIds.Contains(w.WorkItemId))
+            .Select(w => w.WorkItemId)
             .ToListAsync();
 
-        if (!existingItems.Any()) return false;
+        if (!existingWorkItemIds.Any()) return false;
 
-        foreach (var id in workItemIds)
+        // 2. 一次性抓取該使用者針對這批任務「已經存在」的所有狀態
+        var existingStatuses = await _context.UserWorkItemStatuses
+            .Where(s => s.UserId == userId && existingWorkItemIds.Contains(s.WorkItemId))
+            .ToListAsync();
+
+        // 3. 在記憶體中比對並更新或新增
+        foreach (var id in existingWorkItemIds)
         {
-            var status = await _context.UserWorkItemStatuses
-                .FirstOrDefaultAsync(s => s.UserId == userId && s.WorkItemId == id);
+            var status = existingStatuses.FirstOrDefault(s => s.WorkItemId == id);
 
             if (status == null)
             {

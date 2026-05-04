@@ -25,11 +25,16 @@ public class AuthService : IAuthService
     {
         _logger.LogInformation("正在嘗試登入使用帳號: {Username}", request.Username);
 
-        // 1. 查詢使用者與關聯的角色
+        // 1. 查詢使用者與關聯的角色 (使用 Projection 優化，只抓取需要的欄位)
         var user = await _context.Users
-            .Include(u => u.UserRoles)
-            .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Username == request.Username);
+            .Where(u => u.Username == request.Username)
+            .Select(u => new
+            {
+                u.Id,
+                u.PasswordHash,
+                Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList()
+            })
+            .FirstOrDefaultAsync();
 
         // 2. 驗證帳號與密碼 (使用 BCrypt)
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -43,7 +48,7 @@ public class AuthService : IAuthService
         }
 
         // 3. 取得使用者的角色列表
-        var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
+        var roles = user.Roles;
         _logger.LogInformation("登入成功: 使用者 {Username}, 角色: {Roles}", request.Username, string.Join(", ", roles));
 
         // 4. 產生 JWT Token
