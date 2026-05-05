@@ -87,9 +87,19 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
 
-    // 自訂 403 權限不足的回傳訊息
+    // 自訂 401 與 403 的回傳訊息
     options.Events = new JwtBearerEvents
     {
+        OnChallenge = context =>
+        {
+            // 略過預設的 Challenge 行為，避免 .NET 覆蓋我們的自訂訊息
+            context.HandleResponse();
+
+            context.Response.StatusCode = 401;
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new { message = "尚未登入或憑證已過期，請重新登入", status = false });
+            return context.Response.WriteAsync(result);
+        },
         OnForbidden = context =>
         {
             var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
