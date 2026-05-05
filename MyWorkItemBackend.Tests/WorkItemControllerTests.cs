@@ -101,6 +101,21 @@ namespace MyWorkItemBackend.Tests
         }
 
         [Fact]
+        public async Task BatchConfirm_ExceedsLimit_ReturnsBadRequest()
+        {
+            var mock = new Mock<IWorkItemService>();
+            var controller = CreateController(mock);
+            
+            // 產生 101 個 Guid 來模擬超過 100 筆上限的情況
+            var tooManyIds = new List<Guid>();
+            for (int i = 0; i < 101; i++) tooManyIds.Add(Guid.NewGuid());
+            var req = new BatchConfirmRequest { WorkItemIds = tooManyIds };
+
+            var result = await controller.BatchConfirm(req);
+            Assert.IsType<BadRequestObjectResult>(result);
+        }
+
+        [Fact]
         public async Task Revoke_Success_ReturnsOk()
         {
             var mock = new Mock<IWorkItemService>();
