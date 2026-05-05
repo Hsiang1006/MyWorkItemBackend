@@ -1,0 +1,38 @@
+@MyWorkItemBackend_HostAddress = http://localhost:5162
+
+### 1. 登入 (取得 Token)
+# @name login
+POST {{MyWorkItemBackend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "Password123!"
+}
+
+### 儲存 Token
+@token = {{login.response.body.token}}
+
+### 2. 取得任務列表 (User)
+GET {{MyWorkItemBackend_HostAddress}}/api/work-items
+Authorization: Bearer {{token}}
+
+### 3. 管理員建立任務 (Admin)
+POST {{MyWorkItemBackend_HostAddress}}/api/admin/work-items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "新任務測試",
+  "description": "這是一個由 Admin 建立的測試任務"
+}
+
+### 4. 批次確認任務 (User)
+# 請根據資料庫中的 ID 修改
+POST {{MyWorkItemBackend_HostAddress}}/api/work-items/batch-confirm
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "workItemIds": ["00000000-0000-0000-0000-000000000000"]
+}
