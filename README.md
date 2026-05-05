@@ -48,6 +48,7 @@ MyWorkItemBackend/
 ├── Entities/         # 領域實體層 (對應 DB 的 User, Role, WorkItem 等類別)
 ├── Models/DTOs/      # 資料傳輸物件 (定義 API Request/Response 格式)
 ├── Migrations/       # EF Core 資料庫遷移紀錄
+├── MyWorkItemBackend.Tests/ # xUnit 單元測試專案 (包含 Moq 與 InMemory DB 測試)
 └── Program.cs        # 應用程式進入點與服務依賴注入 (DI) 配置
 ```
 
@@ -91,3 +92,15 @@ MyWorkItemBackend/
    dotnet run
    ```
    _啟動後，可以前往 `http://localhost:<埠號>/swagger` (或依據終端機顯示的 URL) 瀏覽 API 文件並進行測試。_
+
+---
+
+## 🧪 單元測試
+
+本專案使用 **xUnit** 搭配 **Moq** 與 **InMemory Database** 進行高覆蓋率的單元測試，涵蓋了所有核心 Controller 與 Service 邏輯。
+
+**執行測試**：
+在專案根目錄中，執行以下指令即可跑完所有測試案例：
+```bash
+dotnet test MyWorkItemBackend.Tests/MyWorkItemBackend.Tests.csproj
+```
